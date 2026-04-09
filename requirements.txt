@@ -1,0 +1,25 @@
+# Core notebook/runtime
+numpy>=1.24
+matplotlib>=3.7
+networkx>=3.1
+tqdm>=4.66
+Pillow>=10.0
+opencv-python>=4.8
+shapely>=2.0
+geopandas>=0.14
+
+# Deep learning
+torch>=2.1
+torchvision>=0.16
+
+# Evaluation
+pytorch-fid>=0.3.0
+
+# Notebook/kernel support
+jupyter>=1.0
+ipykernel>=6.29
+torchinfo>=1.8
+
+# Optional integrations used by the notebook config
+wandb>=0.17
+kaggle>=1.6

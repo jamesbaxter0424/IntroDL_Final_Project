@@ -1,0 +1,6 @@
+dataset/
+checkpoints/
+outputs/
+wandb/
+
+*__pycache__/
