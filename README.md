@@ -90,11 +90,17 @@ In the GraphGPS notebook, the relevant path settings are configured near the top
 GraphGPS checkpoints are saved to:
 
 ```text
-checkpoints/<run_name>_last.pth
-checkpoints/<run_name>_best.pth
+checkpoints/<run_name>/last.pth
+checkpoints/<run_name>/best.pth
+checkpoints/<run_name>/config.yaml
+checkpoints/<run_name>/graphgps_models.py
 ```
 
 Optional periodic checkpoints are also saved when `save_every_n_epochs` is enabled.
+
+```text
+checkpoints/<run_name>/epoch_005.pth
+```
 
 Each checkpoint stores:
 
@@ -123,8 +129,8 @@ Current logging includes:
 When a new **best checkpoint** is found, the notebook can also upload a W&B artifact containing:
 
 - the best checkpoint file
-- a JSON config snapshot
-- the active GraphGPS model source file
+- a YAML config snapshot
+- the active GraphGPS model source file snapshot
 
 This behavior is controlled by:
 
