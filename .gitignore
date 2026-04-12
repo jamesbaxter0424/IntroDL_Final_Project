@@ -2,5 +2,6 @@ dataset/
 checkpoints/
 outputs/
 wandb/
+.env
 
 *__pycache__/
