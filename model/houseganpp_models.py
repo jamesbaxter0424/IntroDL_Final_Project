@@ -113,7 +113,7 @@ def compute_gradient_penalty(
     out = D(x_both, given_y, given_w, nd_to_sample)
     grad = torch.autograd.grad(
         outputs=out, inputs=x_both, grad_outputs=grad_outputs,
-        retain_graph=True, create_graph=True, only_inputs=True,
+        retain_graph=False, create_graph=True, only_inputs=True,
     )[0]
     gradient_penalty = ((grad.norm(2, 1).norm(2, 1) - 1) ** 2).mean()
     return gradient_penalty
