@@ -101,34 +101,41 @@ class UpsampleBlock(nn.Module):
         return self.net(x)
 
 
-def _pool_neighbor_features(feats, edges, positive=True):
+def _pool_neighbor_features(feats, edges, positive=True, normalize=True):
     dtype, device = feats.dtype, feats.device
     node_count = feats.size(0)
     channels, height, width = feats.shape[-3:]
     pooled = torch.zeros(node_count, channels, height, width, dtype=dtype, device=device)
+    counts = torch.zeros(node_count, dtype=dtype, device=device)
 
     if edges is None or edges.numel() == 0:
-        return pooled
+        return pooled, counts
 
     edges = edges.view(-1, 3)
     edge_mask = edges[:, 1] > 0 if positive else edges[:, 1] < 0
     edge_inds = torch.where(edge_mask)[0]
     if edge_inds.numel() == 0:
-        return pooled
+        return pooled, counts
 
     src = torch.cat([edges[edge_inds, 0], edges[edge_inds, 2]]).long()
     dst = torch.cat([edges[edge_inds, 2], edges[edge_inds, 0]]).long()
     src_feats = feats[src]
     dst = dst.view(-1, 1, 1, 1).expand_as(src_feats)
     pooled.scatter_add_(0, dst, src_feats)
-    return pooled
+    counts.scatter_add_(0, dst[:, 0, 0, 0], torch.ones_like(src, dtype=dtype))
+
+    if normalize:
+        norm = counts.clamp_min(1.0).view(-1, 1, 1, 1)
+        pooled = pooled / norm
+    return pooled, counts
 
 
 class SpatialCMP(nn.Module):
     """HouseGAN++-style spatial message passing over node feature maps."""
 
-    def __init__(self, channels):
+    def __init__(self, channels, include_negative=False):
         super().__init__()
+        self.include_negative = include_negative
         self.encoder = nn.Sequential(
             *conv_block(3 * channels, 3 * channels, 3, 1, 1, act="leaky", batch_norm=True),
             ResidualBlock(3 * channels),
@@ -137,8 +144,11 @@ class SpatialCMP(nn.Module):
         )
 
     def forward(self, feats, edges=None):
-        pos = _pool_neighbor_features(feats, edges, positive=True)
-        neg = _pool_neighbor_features(feats, edges, positive=False)
+        pos, _ = _pool_neighbor_features(feats, edges, positive=True, normalize=True)
+        if self.include_negative:
+            neg, _ = _pool_neighbor_features(feats, edges, positive=False, normalize=True)
+        else:
+            neg = torch.zeros_like(feats)
         return self.encoder(torch.cat([feats, pos, neg], dim=1))
 
 
@@ -197,7 +207,7 @@ def _batched_attention(tokens, graph_ids, attn_module):
 class HybridGraphGPSBlock(nn.Module):
     def __init__(self, channels, num_heads=4, mlp_ratio=4):
         super().__init__()
-        self.local_spatial = SpatialCMP(channels)
+        self.local_spatial = SpatialCMP(channels, include_negative=False)
         self.norm1 = nn.LayerNorm(channels)
         self.attn = nn.MultiheadAttention(
             channels, num_heads=num_heads, batch_first=True
@@ -213,7 +223,7 @@ class HybridGraphGPSBlock(nn.Module):
             ResidualBlock(channels),
             *conv_block(channels, channels, 3, 1, 1, act="leaky", batch_norm=True),
         )
-        self.local_scale = nn.Parameter(torch.tensor(1.0))
+        self.local_scale = nn.Parameter(torch.tensor(0.1))
         self.global_scale = nn.Parameter(torch.tensor(1.0))
 
     def forward(self, x, edges):
@@ -301,13 +311,13 @@ class Discriminator(nn.Module):
             *conv_block(16, 16, 3, 1, 1, act="leaky"),
         )
         self.l1 = nn.Sequential(nn.Linear(18, 8 * 64**2))
-        self.cmp_1 = SpatialCMP(16)
+        self.cmp_1 = SpatialCMP(16, include_negative=False)
         self.downsample_1 = nn.Sequential(*conv_block(16, 16, 3, 2, 1, act="leaky"))
-        self.cmp_2 = SpatialCMP(16)
+        self.cmp_2 = SpatialCMP(16, include_negative=False)
         self.downsample_2 = nn.Sequential(*conv_block(16, 16, 3, 2, 1, act="leaky"))
-        self.cmp_3 = SpatialCMP(16)
+        self.cmp_3 = SpatialCMP(16, include_negative=False)
         self.downsample_3 = nn.Sequential(*conv_block(16, 16, 3, 2, 1, act="leaky"))
-        self.cmp_4 = SpatialCMP(16)
+        self.cmp_4 = SpatialCMP(16, include_negative=False)
         self.decoder = nn.Sequential(
             *conv_block(16, 256, 3, 2, 1, act="leaky"),
             *conv_block(256, 128, 3, 2, 1, act="leaky"),
